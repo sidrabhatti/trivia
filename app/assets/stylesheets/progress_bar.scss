@@ -1,0 +1,36 @@
+.question-info {
+  display: block;
+  margin: -30px auto 0 auto;
+
+
+
+  .progress-bar-container {
+    display: none;
+  }
+
+  .question-board {
+    color: #fff;
+    text-align: center;
+    font-family: "Montserrat-SemiBold";
+    text-transform: uppercase;
+
+    .question-word {
+      display: block;
+      font-family: "Montserrat-SemiBold";
+      font-size: 0.81em;
+      letter-spacing: 1px;
+    }
+
+ 
+
+    .question-number {
+      font-size: 0.81em;
+        font-family: "Montserrat-SemiBold";
+    }
+
+    .question-of {
+      font-size: .81em;
+        font-family: "Montserrat-SemiBold";
+    }
+  }
+}

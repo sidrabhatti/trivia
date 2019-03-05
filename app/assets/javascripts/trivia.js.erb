@@ -1,0 +1,326 @@
+// avoids browser caching
+if(performance.navigation.type == 2){
+  location.reload(true);
+}
+
+// avoids browser caching, specifically for safari
+window.onpageshow = function (event) {
+  if (event.persisted) {
+    window.location.reload();
+  }
+};
+
+$(window).bind("load", function() {
+  $("#interstitial").hide();
+  $("#choices_div").hide();
+
+  var DATA = <%= raw @data.to_json %>;
+  window.Questions = <%= raw with_question_images_urls(@data[:questions]).to_json %>;
+
+  $.fn.trivia = function(questions) {
+    //Define variables here
+    // Correct and incorrect answers start at 0
+    //Counter time here. Right now the counter starts at 10.
+    var _t = this;
+    _t.userPick = null;
+    _t.answers = {
+      correct: 0,
+      incorrect: 0
+    };
+    _t.count = 15;
+    // _t.count = 1000000; // for dev convenience
+    _t.current = 0;
+    _t.questions = questions;
+
+    //This block will go through the choices and append them to a button.
+    //The button will get a data id associated with it starting with 0/
+    //So the first button will look like <button data-id=0></button> and so forth
+    //For images to appear, they need to be hosted in S3.
+    _t.ask = function() {
+      if (_t.questions[_t.current]) {
+        window.ProgressBar.incrementFilledCount();
+
+        // Dynamic ga tags trigger
+        index = _t.questions.findIndex(function (x) {
+          return x.guessId == _t.questions[_t.current].guessId;
+        }) + 1;
+        console.log(index);
+        event = "pl_question1" + index;
+        category = "pl_Question " + index;
+        label = "Question " + index;
+
+        //gtag('event', event,{'event_category' : category,'event_label' : label});
+
+        $("#timer").html( _t.count );
+        if (_t.questions[_t.current].is_image_question === true){
+          console.log('image q')
+          console.log(_t.questions[_t.current].question)
+          $("#question_wrapper").html('<div id="question_div">' + '<img class="question_img" src=' + _t.questions[_t.current].question_image_url + '>' + '</div>');
+
+        } else {
+          $("#question_wrapper").html('<div id="question_div">' + '<p class="question-copy">' + _t.questions[_t.current].question + '</p>' + '</div>');
+        }
+
+        var choicesArr = _t.questions[_t.current].choices;
+        var buttonsArr = [];
+        for (var i = 0; i < choicesArr.length; i++) {
+          var button = $('<button>');
+          var choicesBg = $("<div class='choices-bg button-bg'>");
+
+          button.text(choicesArr[i]);
+
+          button.attr('data-id', i);
+          choicesBg.attr('data-id', i);
+
+          $('#choices_div').each(function(){
+            $(choicesBg).insertAfter(button);
+            $("#choices_div").append("<div class='btn-wrapper'>" + button[0].outerHTML + choicesBg[0].outerHTML + "</div>");
+          })
+        }
+
+        var sourceText = _t.questions[_t.current].source;
+        if (sourceText != null) {
+          console.log(sourceText);
+          console.log("source text should be appearing");
+          $('#source_div').append("<div>" + sourceText + "</div>");
+        }
+
+        // $(".choices-bg").wrapAll("<div class='btn-wrapper'>");
+        //The game will go to the next question at 1 second intervals.
+        //If you change the 1000 here, the game will either become faster or slower.
+        window.triviaCounter = setInterval(_t.timer, 1000);
+      }
+    };
+
+    //Reset SVG Animation
+    _t.resetTimerCircle = function() {
+      var $circleAnimationContents = $('#circle-animation').html();
+      $('#circle-animation').html('');
+      $('#circle-animation').html($circleAnimationContents);
+      //the stroke-dasharray attribute controls the pattern of dashes
+      //and gaps used to stroke paths.
+      $('.outer').css({
+        '-webkit-animation-play-state': "initial",
+        '-animation-play-state': "initial",
+        'stroke-dasharray': '133',
+        'transition': 'stroke-dashoffset 0s',
+      })
+    }
+
+    _t.timer = function() {
+      _t.count--;
+      // _t.count = 10;  // dev convenience
+      //If the counter reaches 0, report timer-ended
+      if (_t.count == 0) {
+        console.log("timer-ended");
+        _t.markCorrectAnswerGreen();
+
+        // report wrong answer for this guess, show the x image and then wait 1 second
+        //to proceed to to reset the counter back to 10
+        _t.reportAnswer('incorrect');
+        _t.analyticTag('TIMEOUT', 'Wrong');
+        $("#timer").html("<img class='timeout' src='<%= image_url('timeout.png') %>'>");
+        //When timer runs out, display "Times up!" copy
+        // $("#answer-copy").html("time's up!");
+        setTimeout(function() {
+          _t.nextQ();
+        }, 3000);
+        // }, 100000000); // dev convenience
+
+      } else {
+        if (_t.count > 0) { $("#timer").html( _t.count ); };
+        $("#timer").removeClass("timeout");
+      }
+    };
+
+    //if game has ended send to offer page
+    _t.checkForGameOver = function() {
+      if (this.current === this.questions.length) {
+        window.location.href = DATA.offer_href;
+      };
+    }
+
+    //Next question block.
+    _t.nextQ = function() {
+      //We clear the interval for the counter so we can reset
+      //the question and counter back to 10
+      _t.current++;
+      clearInterval(window.triviaCounter);
+      _t.count = 15;
+
+      setTimeout(function() {
+        $('#timer').html("");
+        _t.checkForGameOver();
+        _t.resetTimerCircle();
+        _t.cleanUp();
+        _t.ask();
+      }, 2000)
+    };
+
+    //This section can report how many questions
+    //have been answered correctly or incorrectly
+    //this will also clear the previous questions and display the next list of button choices.
+    //If this section is not used, the game will keep appending new questions under the previous questions
+    _t.cleanUp = function() {
+      $('#timer').html('');
+      $('#answer-copy').html('');
+      $('#question_div').html('');
+      $('#choices_div').html('');
+      $('#source_div').html('');
+
+      //This code below that is commented out shows how many questions have been answered currently.
+      //This will also show how many questions have been answered incorrectly as well.
+      // $('.correct').html('Correct answers: ' + _t.answers.correct);
+      // $('.incorrect').html('Incorrect answers: ' + _t.answers.incorrect);
+    };
+
+    //The answers are stored as a string.
+    //If the correct answer is true, the operator has the value of correct.
+    //Otherwise it has the value of incorrect.
+    _t.answer = function(correct) {
+      var string = correct ? 'correct' : 'incorrect';
+      _t.answers[string]++;
+      //The commented out code below will display how many correct answers have been chosen
+      // $('.' + string).html(string + ' answers: ' + _t.answers[string]);
+
+    };
+    _t.reportAnswer = function(answeredStatus) {
+      $.ajax({
+        type: 'put',
+        url: '/days/<%= @day.token %>/customers/<%= @customer.person_key %>/guesses/' + _t.questions[_t.current].guessId,
+        data: {
+          guess: {
+            answered_status: answeredStatus
+          }
+        }
+      })
+    };
+
+    //Find the correct choices button and add Class Correct
+    _t.markCorrectAnswerGreen = function() {
+      var $buttons = $('#choices_div').find('button'+'[data-id]');
+      var correctButton = $buttons[_t.currentQuestion().correct];
+      var $correctButton = $(correctButton);
+      $correctButton.addClass('correct');
+    };
+    _t.currentQuestion = function() { return this.questions[this.current] };
+    _t.currentQuestionGaEventCategory = function() {
+      return this.currentQuestion().ga_event_category;
+    };
+    _t.analyticTag = function(chosenAnswer, rightOrWrong) {
+      gtag(
+        'event',
+        chosenAnswer,
+        {
+          'event_category' : this.currentQuestionGaEventCategory(),
+          'event_label': rightOrWrong
+        }
+      );
+    }
+    return _t;
+  };
+
+  var Trivia;
+
+  //This section is for the Intersitital page and start page
+  //When the start button is clicked, we hide the button and show the interstitial page
+  //the css needs to hide the bg image and the z index will change.
+
+  $("#start_button").click(function() {
+    $(this).hide();
+    $('#start-screen').hide();
+    $('#interstitial').show();
+    $(".start-screen").css({
+      "background-image": "none",
+      "z-index": "-1"
+    });
+
+
+    Trivia = new $(window).trivia(window.Questions);
+    window.ProgressBar.setFilledCount(3 - window.Questions.length);
+
+    $(".start-screen").hide();
+    //figure holds the animated SVG that contains the timer within it
+    //After 3 seconds we hide the interstitial page and start the trivia game
+    $("#interstitial").on('click', function(){
+      console.log("clicked");
+      $("#interstitial").hide();
+      $("#choices_div").show();
+      $('figure').addClass("timer");
+      Trivia = new $(window).trivia(window.Questions);
+      Trivia.ask();
+    })
+  });
+
+  //The button for each answer is within a #choices_div.
+  //On click we check to see if the answer is right or wrong.
+  $('#choices_div').on('click', 'button', function(e) {
+    if ($('.correct').length > 0) { return } // protects against double clicks
+    var userPick = $(this).data("id"),
+        _t = Trivia || $(window).trivia(),
+        index = _t.questions[_t.current].correct,
+        correct = _t.questions[_t.current].choices[index];
+    //When an answer is selected, pause the circle SVG animation
+    $('.outer').css({
+      '-webkit-animation-play-state': "paused",
+      '-animation-play-state': "paused"
+    })
+
+    //Block for wrong answers
+    if (userPick !== index) {
+      //if the answer is wrong, change the background color of the button to gray on click
+      _t.analyticTag($(this).text(), 'Wrong');
+      $(this).css({
+        "background": "#bfbfbf",
+        "color": "#777777",
+        "text-decoration": "line-through",
+      });
+      _t.markCorrectAnswerGreen();
+      console.log(correct);
+      console.log("wrong answer");
+      _t.reportAnswer('incorrect')
+      _t.answer(false);
+      //When answer is wrong, display "So Close!" copy
+
+
+      $("#question_div").css({
+        "color": "#370d44",
+        "text-transform": "uppercase",
+        "font-size": "2.28em",
+        "letter-spacing": "1px",
+        "font-family": "Montserrat-SemiBold"
+      });
+      if (_t.questions[_t.current].is_image_question === true){
+        console.log("image is present");
+        $("#question_img").css({"display": "none"})
+        $("#question_div").html('<span class="question-wrong">' + "incorrect" + '</span>');
+      }else{
+        $("#question_div").html('<span class="question-wrong">' + "incorrect" + '</span>');
+      }
+
+    } else {
+      //Block for right answers
+      _t.analyticTag($(this).text(), 'Right');
+
+      //If the answer is right change the background color to green on click
+      _t.markCorrectAnswerGreen();
+      console.log("Correct answer");
+      _t.reportAnswer('correct')
+      _t.answer(true);
+      //When answer is correct, display "Nice Work!" copy
+      $("#question_div").html('<span class="question-right">' + "Correct<br><span class='cents'>+$0.25</span>" + '</span>');
+      $("#question_div").css({
+        "color": "#370d44",
+        "text-transform": "uppercase",
+        "font-size": "2.28em",
+        "letter-spacing": "1px",
+        "font-family": "Montserrat-SemiBold"
+      });
+      $("#question_wrapper").css({"display": "block !important"})
+
+    }
+    _t.nextQ();
+
+  });
+
+});

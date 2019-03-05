@@ -1,0 +1,50 @@
+<%=render 'layouts/rotate_portrait'%>
+<div class="offer-page">
+  <%= render @offer_page, day: @day %>
+</div>
+
+
+<script>
+  //This will open a users native/default texting app with
+  //a pre-populated SMS Message when users click the button .send-it 
+  //on _offer_page.html.erb
+  document.addEventListener('DOMContentLoaded', function() {
+    var gotoLink = '';
+    var userAgent = navigator.userAgent || navigator.vendor || window.opera;
+    var visible = false;
+    var smsCopy = encodeURI("Hey friend, I just earned $$$ towards a Redbox code with Redbox IQ Trivia! Check out how you can play too: <%= ENV['TAP_TO_JOIN_URL'] %> :)");
+
+
+
+    if (/windows phone/i.test(userAgent)) {
+      console.log("Windows Phone");
+    } else if (/android/i.test(userAgent)) {
+      console.log("Android");
+      visible = true
+      gotoLink = "sms:?body=" + smsCopy;
+    } else if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+      console.log("iOS");
+      visible = true
+      gotoLink = "sms:&body=" + smsCopy;
+    } else {
+      console.log("unknown");
+    }
+
+    jQuery('.send-it').attr('href', gotoLink)
+
+    if (!visible) {
+      jQuery('.send-it').css('display', 'none');
+    }
+
+  }, false);
+
+  $(function(){
+    $('.send-it').on('click', function(e) {
+      console.log("clicked");
+      var smsCopy = $(e.currentTarget).attr('href');
+      window.location.replace(smsCopy);
+    });
+  })
+
+
+</script>

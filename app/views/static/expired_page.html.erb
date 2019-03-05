@@ -1,0 +1,16 @@
+<div class="expired-page">
+	<%=image_tag "header.png", class: "header visible-xs"%>
+	<%=image_tag "header_desktop.png", class: "header hidden-xs"%>
+
+	<div class="copy-container">
+	  <h1>Sorry!</h1>
+	  <h2>This link has expired. Check your phone for a text with a link to today's questions &amp; your chance to earn.</h2>
+	  <p>Visit us at <a href="https://redbox.com" target="_blank">redbox.com</a></p>
+	</div>
+</div>
+
+<script>
+	$(function() {
+		gtag('event','pl_already_entered',{'event_category' : 'pl_Already Entered','event_label' : 'Already Entered'});
+	});
+</script>
